@@ -1,0 +1,78 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: sendy-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - sendy-network
+
+  # Sendy Application
+  sendy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sendy-app
+    restart: unless-stopped
+    ports:
+      - "${SENDY_PORT:-80}:80"
+    environment:
+      # Database Configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_CHARSET: utf8mb4
+      
+      # Application Configuration
+      APP_PATH: ${APP_PATH}
+      
+      # AWS SES Configuration (Optional)
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - ./uploads:/var/www/html/uploads
+    depends_on:
+      - mysql
+    networks:
+      - sendy-network
+
+  # Cron service for scheduled tasks
+  sendy-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sendy-cron
+    restart: unless-stopped
+    command: /usr/local/bin/cron-entrypoint.sh
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      APP_PATH: ${APP_PATH}
+    volumes:
+      - ./uploads:/var/www/html/uploads
+      - ./cron-entrypoint.sh:/usr/local/bin/cron-entrypoint.sh:ro
+    depends_on:
+      - sendy
+    networks:
+      - sendy-network
+
+networks:
+  sendy-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
