@@ -44,8 +44,9 @@ RUN { \
 # Copy application files
 COPY --chown=www-data:www-data . /var/www/html/
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html \
+# Create necessary directories and set permissions
+RUN mkdir -p /var/www/html/uploads \
+    && chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
     && chmod 777 /var/www/html/uploads
 
