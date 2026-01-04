@@ -1,0 +1,47 @@
+name: build-docker
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+
+jobs:
+  setup-job:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      service_name: ${{ steps.set-outputs.outputs.service_name }}
+      image_tag: ${{ steps.set-outputs.outputs.image_tag }}
+    steps:
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          echo "service_name=${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}" >> $GITHUB_OUTPUT
+
+  docker-build:
+    needs: setup-job
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        name: Check out
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+    
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:${{ needs.setup-job.outputs.image_tag }}
+          cache-from: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:buildcache
+          cache-to: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:buildcache,mode=max
