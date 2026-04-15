@@ -13,12 +13,19 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - sendy-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Sendy Application
   sendy:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
+      target: app
     container_name: sendy-app
     restart: unless-stopped
     ports:
@@ -31,18 +38,19 @@ services:
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_CHARSET: utf8mb4
-      
+
       # Application Configuration
       APP_PATH: ${APP_PATH}
-      
+
       # AWS SES Configuration (Optional)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
     volumes:
-      - ./uploads:/var/www/html/uploads
+      - sendy_uploads:/var/www/html/uploads
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - sendy-network
 
@@ -50,10 +58,10 @@ services:
   sendy-cron:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
+      target: cron
     container_name: sendy-cron
     restart: unless-stopped
-    command: /usr/local/bin/cron-entrypoint.sh
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
@@ -62,10 +70,10 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD}
       APP_PATH: ${APP_PATH}
     volumes:
-      - ./uploads:/var/www/html/uploads
-      - ./cron-entrypoint.sh:/usr/local/bin/cron-entrypoint.sh:ro
+      - sendy_uploads:/var/www/html/uploads
     depends_on:
-      - sendy
+      sendy:
+        condition: service_healthy
     networks:
       - sendy-network
 
@@ -75,4 +83,6 @@ networks:
 
 volumes:
   mysql_data:
+    driver: local
+  sendy_uploads:
     driver: local

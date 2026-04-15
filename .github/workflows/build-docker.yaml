@@ -24,9 +24,19 @@ jobs:
   docker-build:
     needs: setup-job
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: app
+            suffix: ""
+          - target: cron
+            suffix: "-cron"
     steps:
       - uses: actions/checkout@v6
         name: Check out
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -37,11 +47,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker Image
+      - name: Build and push ${{ matrix.target }}
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:${{ needs.setup-job.outputs.image_tag }}
-          cache-from: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:buildcache
-          cache-to: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}:buildcache,mode=max
+          tags: |
+            ${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}${{ matrix.suffix }}:${{ needs.setup-job.outputs.image_tag }}
+            ${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}${{ matrix.suffix }}:latest
+          cache-from: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}${{ matrix.suffix }}:buildcache
+          cache-to: type=registry,ref=${{ github.actor }}/${{ needs.setup-job.outputs.service_name }}${{ matrix.suffix }}:buildcache,mode=max
